@@ -1,0 +1,55 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: spendwise, POSTGRES_PASSWORD: spendwise, POSTGRES_DB: spendwise_test }
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U spendwise" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://spendwise:spendwise@localhost:5433/spendwise_test?schema=public
+      DATABASE_URL: postgresql://spendwise:spendwise@localhost:5433/spendwise_test?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx prisma generate
+        working-directory: apps/api
+      - run: npx tsc --noEmit
+        working-directory: apps/api
+      - name: Unit tests
+        run: npm run test:unit -w apps/api
+      - name: Integration tests (real Postgres, real migrations)
+        run: npm run test:e2e -w apps/api
+      - name: Build
+        run: npm run build -w apps/api
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck -w apps/web
+      - run: npm test -w apps/web
+      - run: npm run build -w apps/web
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/mobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: apps/mobile/package-lock.json }
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test -- --ci

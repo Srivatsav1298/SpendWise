@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "SpendWise",
+    "slug": "spendwise-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F7F6F3",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.spendwise.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "SpendWise uses the camera to photograph receipts for your expenses.",
+        "NSPhotoLibraryUsageDescription": "SpendWise lets you attach receipt photos from your library."
+      }
+    },
+    "android": {
+      "package": "com.spendwise.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F5C5A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "SpendWise uses the camera to photograph receipts for your expenses.",
+          "photosPermission": "SpendWise lets you attach receipt photos from your library."
+        }
+      ],
+      "expo-font"
+    ]
+  }
+}

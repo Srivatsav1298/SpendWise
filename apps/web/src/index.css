@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-feature-settings: 'tnum' 1, 'cv11' 1; }
+  :focus-visible { outline: 2px solid #0F5C5A; outline-offset: 2px; }
+}

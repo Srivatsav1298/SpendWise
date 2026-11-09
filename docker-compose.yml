@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: spendwise
+      POSTGRES_PASSWORD: spendwise
+      POSTGRES_DB: spendwise
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spendwise"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://spendwise:spendwise@db:5432/spendwise?schema=public
+      # Override both secrets for anything other than a local demo.
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-demo-secret-change-me-0123456789abcdef}
+      # development => invite/reset tokens are returned in API responses (no email provider is wired up).
+      NODE_ENV: ${API_NODE_ENV:-development}
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+volumes:
+  pgdata:
+  uploads:

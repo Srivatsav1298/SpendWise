@@ -1,0 +1,23 @@
+{
+  "name": "spendwise",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d db",
+    "api:dev": "npm run start:dev -w apps/api",
+    "web:dev": "npm run dev -w apps/web",
+    "mobile:start": "npm run start -w apps/mobile",
+    "build": "npm run build -w apps/api && npm run build -w apps/web",
+    "test": "npm test -w apps/api && npm test -w apps/web"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "argon2@0.41.1": true,
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true
+  }
+}

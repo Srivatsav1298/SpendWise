@@ -1,0 +1,344 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ORG_ADMIN
+  FINANCE_MANAGER
+  EMPLOYEE
+}
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+enum CardStatus {
+  ACTIVE
+  FROZEN
+  DEACTIVATED
+}
+
+enum TransactionStatus {
+  APPROVED
+  DECLINED
+}
+
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  isSuperAdmin  Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  memberships   OrganisationMembership[]
+  employees     Employee[]
+  refreshTokens RefreshToken[]
+  passwordResets PasswordReset[]
+}
+
+model Organisation {
+  id               String    @id @default(uuid())
+  name             String
+  slug             String    @unique
+  baseCurrency     String    @default("NOK") @db.VarChar(3)
+  status           OrgStatus @default(ACTIVE)
+  requireReceiptOver Decimal @default(500) @db.Decimal(14, 2)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  memberships OrganisationMembership[]
+  departments Department[]
+  employees   Employee[]
+  expenses    Expense[]
+  cards       CorporateCard[]
+  transactions Transaction[]
+  budgets     Budget[]
+  policies    SpendingPolicy[]
+  notifications Notification[]
+  auditLogs   AuditLog[]
+  invitations Invitation[]
+}
+
+model OrganisationMembership {
+  id             String   @id @default(uuid())
+  userId         String
+  organisationId String
+  role           Role
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organisationId])
+  @@index([organisationId, role])
+}
+
+model Department {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+  budgets      Budget[]
+
+  @@unique([organisationId, name])
+}
+
+model Employee {
+  id             String   @id @default(uuid())
+  organisationId String
+  userId         String
+  departmentId   String?
+  jobTitle       String?
+  isActive       Boolean  @default(true)
+  monthlyLimit   Decimal? @db.Decimal(14, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  expenses     Expense[]
+  cards        CorporateCard[]
+
+  @@unique([organisationId, userId])
+  @@index([organisationId, departmentId])
+}
+
+model Expense {
+  id             String        @id @default(uuid())
+  organisationId String
+  employeeId     String
+  departmentId   String?
+  amount         Decimal       @db.Decimal(14, 2)
+  currency       String        @db.VarChar(3)
+  expenseDate    DateTime      @db.Date
+  category       String
+  merchant       String
+  description    String?
+  status         ExpenseStatus @default(DRAFT)
+  submittedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+  receipts     ExpenseReceipt[]
+  approvals    Approval[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, employeeId, expenseDate])
+  @@index([organisationId, category])
+}
+
+model ExpenseReceipt {
+  id             String   @id @default(uuid())
+  organisationId String
+  expenseId      String
+  storageKey     String   @unique
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  uploadedById   String
+  createdAt      DateTime @default(now())
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+model Approval {
+  id             String           @id @default(uuid())
+  organisationId String
+  expenseId      String
+  approverId     String
+  decision       ApprovalDecision
+  comment        String?
+  createdAt      DateTime         @default(now())
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId, createdAt])
+  @@index([organisationId])
+}
+
+model CorporateCard {
+  id             String     @id @default(uuid())
+  organisationId String
+  employeeId     String
+  label          String
+  last4          String     @db.VarChar(4)
+  status         CardStatus @default(ACTIVE)
+  currency       String     @db.VarChar(3)
+  dailyLimit     Decimal    @db.Decimal(14, 2)
+  monthlyLimit   Decimal    @db.Decimal(14, 2)
+  blockedCategories String[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+  transactions Transaction[]
+
+  @@index([organisationId, employeeId])
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  organisationId String
+  cardId         String
+  employeeId     String
+  amount         Decimal           @db.Decimal(14, 2)
+  currency       String            @db.VarChar(3)
+  merchant       String
+  category       String
+  status         TransactionStatus
+  declineReason  String?
+  flagged        Boolean           @default(false)
+  flagReason     String?
+  idempotencyKey String?
+  occurredAt     DateTime          @default(now())
+
+  organisation Organisation  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  card         CorporateCard @relation(fields: [cardId], references: [id])
+
+  @@unique([cardId, idempotencyKey])
+  @@index([organisationId, occurredAt])
+  @@index([organisationId, employeeId])
+  @@index([organisationId, flagged])
+}
+
+model Budget {
+  id             String   @id @default(uuid())
+  organisationId String
+  departmentId   String?
+  name           String
+  amount         Decimal  @db.Decimal(14, 2)
+  currency       String   @db.VarChar(3)
+  periodStart    DateTime @db.Date
+  periodEnd      DateTime @db.Date
+  thresholdsNotified Int[]
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, periodStart, periodEnd])
+  @@index([departmentId])
+}
+
+model SpendingPolicy {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  category       String?
+  maxAmountPerExpense Decimal? @db.Decimal(14, 2)
+  requireReceipt Boolean  @default(true)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+}
+
+model Notification {
+  id             String   @id @default(uuid())
+  organisationId String
+  userId         String
+  title          String
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organisationId String?
+  actorId        String?
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  organisationId String?
+  tokenHash   String    @unique
+  familyId    String
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedById String?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Invitation {
+  id             String    @id @default(uuid())
+  organisationId String
+  email          String
+  role           Role
+  departmentId   String?
+  monthlyLimit   Decimal?  @db.Decimal(14, 2)
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, email])
+}
